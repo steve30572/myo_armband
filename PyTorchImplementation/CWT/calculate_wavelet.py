@@ -11,7 +11,7 @@ def calculate_wavelet_dataset(dataset):
         canals = []
         for electrode_vector in examples:
             coefs = calculate_wavelet_vector(np.abs(electrode_vector), mother_wavelet=mother_wavelet, scales=np.arange(1, 33))  # 33 originally
-            print(np.shape(coefs))
+            #rint(np.shape(coefs))
             # show_wavelet(coef=coefs)
             coefs = zoom(coefs, .25, order=0)
             coefs = np.delete(coefs, axis=0, obj=len(coefs)-1)

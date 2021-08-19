@@ -1,5 +1,5 @@
 import numpy as np
-from Pytorch_implementation import calculate_wavelet
+import calculate_wavelet
 
 number_of_vector_per_example = 52
 number_of_canals = 8
@@ -96,6 +96,7 @@ def read_data(path):
             data_read_from_file = np.array(data_read_from_file, dtype=np.float32)
             dataset_example = format_data_to_train(data_read_from_file)
             examples.append(dataset_example)
+            print("shape is: ",np.shape(dataset_example))
             labels.append((i % number_of_classes) + np.zeros(dataset_example.shape[0]))
         examples, labels = shift_electrodes(examples, labels)
         list_dataset.append(examples)
