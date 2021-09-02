@@ -18,10 +18,14 @@ import os
 #
 # path='/Users/heesoo/PycharmProjects/pythonProject6/MyoArmbandDataset/PreTrainingDataset'
 # load_pre_training_dataset.read_data(path)
-examples, labels = load_evaluation_dataset.read_data('/Users/heesoo/PycharmProjects/pythonProject6/MyoArmbandDataset/EvaluationDataset',
-                                                     type='Test1')
+# examples, labels = load_evaluation_dataset.read_data('/Users/heesoo/PycharmProjects/pythonProject6/MyoArmbandDataset/EvaluationDataset',
+#                                                      type='Test1')
+#
+# datasets = [examples, labels]
+# print(examples.shape)
+#
+# np.save("../formatted_datasets/test1_evaluation_example",examples,allow_pickle=True)
+# np.save("../formatted_datasets/test1_evaluation_labels",labels,allow_pickle=True)
 
-datasets = [examples, labels]
-print(examples.shape)
-np.save("../formatted_datasets/test1_evaluation_example",examples,allow_pickle=True)
-np.save("../formatted_datasets/test1_evaluation_labels",labels,allow_pickle=True)
+labels=np.load("../formatted_datasets/test1_evaluation_labels.npy",allow_pickle=True)
+print((labels[0][25]))
