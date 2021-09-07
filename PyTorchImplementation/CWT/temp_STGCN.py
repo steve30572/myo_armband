@@ -4,20 +4,13 @@ import torch.nn.functional as F
 
 initializer = nn.init.xavier_uniform_
 
-adj = torch.zeros(8,8)
-for i in range(8):
-    devider= i+8
-    adj[i][devider % 8] = 1
-    adj[i][(devider + 1) % 8] = 1
-    adj[i][(devider - 1) % 8] = 1
-    #adj[i][(devider + 4) % 8] = 1
 
 class Gconv(nn.Module):
     def __init__(self, n_route, Ks, c_in, c_out):
         super(Gconv, self).__init__()
         self.n_route = n_route
         self.Ks = Ks
-        self.kernel = adj#torch.ones(self.n_route, self.Ks*self.n_route)
+        self.kernel = torch.ones(self.n_route, self.Ks*self.n_route)
         self.theta = nn.Parameter(initializer(torch.randn(self.Ks*c_in, c_out)))
 
     def forward(self, x, theta, Ks, c_in, c_out):
@@ -108,6 +101,7 @@ class Spatio_conv_layer(nn.Module):
         else:
             x_input = x
         x_input = x_input[:, :, self.Ks - 1:T, :]
+
         x_input2=torch.transpose(x_input,2,1)
 
         #x_input=torch.transpose(x_input,2,3)
@@ -141,12 +135,12 @@ class St_conv_block(nn.Module):
 
         #self.spat4 = Spatio_conv_layer(c_oo, c_oo, Ks, n_route)  # 32, 32
         #output = (32, 6, 8)
-        self.mlp1 = nn.Linear(c_oo * 96, 100)
+        self.mlp1 = nn.Linear(c_oo * 36, 100)
         self.mlp2 = nn.Linear(100, 100)
         self.mlp=nn.Linear(100, num_class)
         self.drop1 = nn.Dropout2d(p=keep_prob)
         self.drop2 = nn.Dropout2d(p=keep_prob)
-        #self.drop3 = nn.Dropout2d(p=keep_prob)
+        self.drop3 = nn.Dropout2d(p=keep_prob)
         self.drop4 = nn.Dropout2d(p=keep_prob)
         self.drop5 = nn.Dropout2d(p=keep_prob)
 
@@ -165,7 +159,7 @@ class St_conv_block(nn.Module):
         x = self.bn_t2(x)
 
 
-        #x = self.spat3(x)
+        x = self.spat3(x)
 
         x = self.temp3(x)
 
@@ -175,20 +169,12 @@ class St_conv_block(nn.Module):
 
 
         bs ,_ , _ , _ = x.shape
-        #print(x.shape)
         #x=F.normalize(x,p=2,dim=1)  ##normalize 잘 되는지 확인 필요
         x = x.reshape(bs,-1)
         x = self.mlp1(x)
-        x = F.relu(x)
-        x = self.drop1(x)
         x = self.mlp2(x)
-
-        #x = self.drop1(x)
-        x = F.relu(x)
-        x = self.drop2(x)
         x = self.mlp(x)
-
-        #x = self.drop3(x)
+        #x = self.drop(x)
 
         return F.log_softmax(x, dim=1)
 
@@ -217,17 +203,48 @@ class Output_layer(nn.Module):
         x=self.full(x)
         return x
 
+
+class temp_GCN(nn.Module):
+    def __init__(self, feature, next_feature_num):
+        super(temp_GCN, self).__init__()
+
+        self.W = torch.nn.Parameter(torch.randn(feature , next_feature_num))
+        self.A = torch.ones(8 , 8)
+    def forward(self , x):
+        result = torch.matmul(self.A , x)
+        result=torch.matmul(result, self.W)
+        return result
+class TEMPGCN(nn.Module):
+    def __init__(self, feature_list, num_class):
+        super(TEMPGCN, self).__init__()
+        modules = []
+        before = feature_list[0]
+        for i in range(1,len(feature_list)):
+            modules.append(temp_GCN(before, feature_list[i]))
+            before = feature_list[i]
+        self.FC1 = nn.Linear(8,100)
+        self.FC2 = nn.Linear(100,100)
+        self.FC3 = nn.Linear(100,num_class)
+        self.model = nn.Sequential(*modules)
+    def forward(self, x):
+        x = self.model(x)
+        x = x.view(-1,8)
+        x = self.FC1(x)
+        x = self.FC2(x)
+        x = self.FC3(x)
+        return x
+
+
+
 if __name__=='__main__':
-    a=torch.randn(12,7,8,12)
-    model=St_conv_block(8,2,1,[7,16,32],'scope',0.2,'glu',1,7)
-    first=list(model.parameters())[5].clone()
-    last=torch.nn.Linear(8,4)
-    last.requires_grad=True
+    temp_list=[84,64,32,16,4,1]
+    model=TEMPGCN(temp_list,7)
+    a=torch.randn(8,84)
     for i in range(1):
         model.train()
         b=model(a)
 
-        answer=torch.randn(12,7)
+        answer=torch.randn(1,7)
 
         #answer=answer.to(torch.float32)
         #answer.requires_grad=True
@@ -243,15 +260,40 @@ if __name__=='__main__':
         losses.backward()
         optim.step()
 
-    count=0
-    for name,param in model.named_parameters():
-        count+=1
-        print(name)
-        if param.grad is not None:
-            print("not None bro",count)
-    #optim.step()
-    b=list(model.parameters())[5].clone()
-    print(torch.equal(first.data,b.data))
+    # a=torch.randn(12,7,8,12)
+    # model=St_conv_block(8,2,2,[7,16,32],'scope',0.2,'glu',1,7)
+    # first=list(model.parameters())[5].clone()
+    # last=torch.nn.Linear(8,4)
+    # last.requires_grad=True
+    # for i in range(1):
+    #     model.train()
+    #     b=model(a)
+    #
+    #     answer=torch.randn(12,7)
+    #
+    #     #answer=answer.to(torch.float32)
+    #     #answer.requires_grad=True
+    #     #answer=answer.reshape(-1,1,1,1)
+    #     #print(answer.shape)
+    #     #b=b.reshape(1,12)
+    #     #answer=answer.reshape(1,12)
+    #     #print(b.shape,answer.shape)
+    #     optim=torch.optim.Adam(model.parameters(),lr=2)
+    #     loss=torch.nn.MSELoss()
+    #     losses=loss(b,answer)
+    #
+    #     losses.backward()
+    #     optim.step()
+    #
+    # count=0
+    # for name,param in model.named_parameters():
+    #     count+=1
+    #     print(name)
+    #     if param.grad is not None:
+    #         print("not None bro",count)
+    # #optim.step()
+    # b=list(model.parameters())[5].clone()
+    # print(torch.equal(first.data,b.data))
 
 
 

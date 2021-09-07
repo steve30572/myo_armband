@@ -1,5 +1,5 @@
 import numpy as np
-# from Pytorch_implementation.CWT import Wavelet_CNN_Source_Network
+import Wavelet_CNN_Source_Network
 from torch.utils.data import TensorDataset
 import torch.nn as nn
 import torch.optim as optim
@@ -7,9 +7,6 @@ import torch
 from torch.autograd import Variable
 import time
 from scipy.stats import mode
-import Wavelet_CNN_Source_Network
-import STGCN
-
 
 def confusion_matrix(pred, Y, number_class=7):
     confusion_matrice = []
@@ -48,14 +45,10 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
                       labels_test_1):
     accuracy_test0 = []
     accuracy_test1 = []
-
-    X_fine_tune_train, Y_fine_tune_train = [], []
-    X_test_0, Y_test_0 = [], []
-    X_test_1, Y_test_1 = [], []
-
+    # initialized_weights = np.load("initialized_weights.npy")
     for dataset_index in range(0, 17):
-        # for dataset_index in [11, 15]:
-
+    #for dataset_index in [11, 15]:
+        X_fine_tune_train, Y_fine_tune_train = [], []
         for label_index in range(len(labels_training)):
             if label_index == dataset_index:
                 print("Current dataset test : ", dataset_index)
@@ -63,13 +56,14 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
                     if (example_index < 28):
                         X_fine_tune_train.extend(examples_training[label_index][example_index])
                         Y_fine_tune_train.extend(labels_training[label_index][example_index])
-
+        X_test_0, Y_test_0 = [], []
         for label_index in range(len(labels_test_0)):
             if label_index == dataset_index:
                 for example_index in range(len(examples_test_0[label_index])):
                     X_test_0.extend(examples_test_0[label_index][example_index])
                     Y_test_0.extend(labels_test_0[label_index][example_index])
 
+        X_test_1, Y_test_1 = [], []
         for label_index in range(len(labels_test_1)):
             if label_index == dataset_index:
                 for example_index in range(len(examples_test_1[label_index])):
@@ -85,52 +79,36 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
 
     print(torch.from_numpy(np.array(Y_fine_tune, dtype=np.int32)).size(0))
     print(np.shape(np.array(X_fine_tune, dtype=np.float32)))
-    X_fine_tune = torch.from_numpy(np.array(X_fine_tune, dtype=np.float32))
-    X_fine_tune = torch.transpose(X_fine_tune, 1, 2)
-    X_fine_tune = torch.transpose(X_fine_tune, 1, 3)
-    Y_fine_tune = torch.from_numpy(np.array(Y_fine_tune, dtype=np.float32))
-
-    valid_examples = torch.from_numpy(np.array(valid_examples, dtype=np.float32))
-    valid_examples = torch.transpose(valid_examples, 1, 2)
-    valid_examples = torch.transpose(valid_examples, 1, 3)
-    labels_valid = torch.from_numpy(np.array(labels_valid, dtype=np.float32))
-
-    X_test_0 = torch.from_numpy(np.array(X_test_0, dtype=np.float32))
-    X_test_0 = torch.transpose(X_test_0, 1, 2)
-    X_test_0 = torch.transpose(X_test_0, 1, 3)
-    X_test_1 = torch.from_numpy(np.array(X_test_1, dtype=np.float32))
-    X_test_1 = torch.transpose(X_test_1, 1, 2)
-    X_test_1 = torch.transpose(X_test_1, 1, 3)
-    Y_test_0 = torch.from_numpy(np.array(Y_test_0, dtype=np.float32))
-
-    Y_test_1 = torch.from_numpy(np.array(Y_test_1, dtype=np.float32))
-
-    train = TensorDataset(X_fine_tune, Y_fine_tune)
-    validation = TensorDataset(valid_examples, labels_valid)
+    train = TensorDataset(torch.from_numpy(np.array(X_fine_tune, dtype=np.float32)),
+                          torch.from_numpy(np.array(Y_fine_tune, dtype=np.int32)))
+    validation = TensorDataset(torch.from_numpy(np.array(valid_examples, dtype=np.float32)),
+                               torch.from_numpy(np.array(labels_valid, dtype=np.int32)))
 
     trainloader = torch.utils.data.DataLoader(train, batch_size=128, shuffle=True)
     validationloader = torch.utils.data.DataLoader(validation, batch_size=128, shuffle=True)
 
-    test_0 = TensorDataset(X_test_0, Y_test_0)
-    test_1 = TensorDataset(X_test_1, Y_test_1)
+    test_0 = TensorDataset(torch.from_numpy(np.array(X_test_0, dtype=np.float32)),
+                           torch.from_numpy(np.array(Y_test_0, dtype=np.int32)))
+    test_1 = TensorDataset(torch.from_numpy(np.array(X_test_1, dtype=np.float32)),
+                           torch.from_numpy(np.array(Y_test_1, dtype=np.int32)))
 
-    test_0_loader = torch.utils.data.DataLoader(test_0, batch_size=128, shuffle=False)
-    test_1_loader = torch.utils.data.DataLoader(test_1, batch_size=128, shuffle=False)
+    test_0_loader = torch.utils.data.DataLoader(test_0, batch_size=1, shuffle=False)
+    test_1_loader = torch.utils.data.DataLoader(test_1, batch_size=1, shuffle=False)
 
-    stgcn = STGCN.St_conv_block(8, 2, 2, [7, 16, 32], "scope", 0.3, act_func='glu', channel=1, num_class=7)
+    cnn = Wavelet_CNN_Source_Network.Net(number_of_class=7, batch_size=128, number_of_channel=12,
+                                         learning_rate=0.0404709, dropout=.5)
 
     criterion = nn.NLLLoss(size_average=False)
-
-    optimizer = optim.Adam(stgcn.parameters(), lr=0.0001)  # lr=0.0404709)
+    optimizer = optim.Adam(cnn.parameters(), lr=0.0404709)
 
     precision = 1e-8
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', factor=.2, patience=5,
                                                      verbose=True, eps=precision)
 
-    stgcn, num_epochs = train_model(stgcn, criterion, optimizer, scheduler,
-                        dataloaders={"train": trainloader, "val": validationloader}, precision=precision)
+    cnn = train_model(cnn, criterion, optimizer, scheduler,
+                      dataloaders={"train": trainloader, "val": validationloader}, precision=precision)
 
-    stgcn.eval()
+    cnn.eval()
     total = 0
     correct_prediction_test_0 = 0
     for k, data_test_0 in enumerate(test_0_loader, 0):
@@ -141,7 +119,7 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
         concat_input = inputs_test_0
         for i in range(20):
             concat_input = torch.cat([concat_input, inputs_test_0])
-        outputs_test_0 = stgcn(concat_input)
+        outputs_test_0 = cnn(concat_input)
         _, predicted = torch.max(outputs_test_0.data, 1)
         correct_prediction_test_0 += (mode(predicted.cpu().numpy())[0][0] ==
                                       ground_truth_test_0.data.cpu().numpy()).sum()
@@ -159,7 +137,7 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
         concat_input = inputs_test_1
         for i in range(20):
             concat_input = torch.cat([concat_input, inputs_test_1])
-        outputs_test_1 = stgcn(concat_input)
+        outputs_test_1 = cnn(concat_input)
         _, predicted = torch.max(outputs_test_1.data, 1)
         correct_prediction_test_1 += (mode(predicted.cpu().numpy())[0][0] ==
                                       ground_truth_test_1.data.cpu().numpy()).sum()
@@ -169,18 +147,16 @@ def calculate_fitness(examples_training, labels_training, examples_test_0, label
 
     print("AVERAGE ACCURACY TEST 0 %.3f" % np.array(accuracy_test0).mean())
     print("AVERAGE ACCURACY TEST 1 %.3f" % np.array(accuracy_test1).mean())
+    return accuracy_test0, accuracy_test1
 
-    return accuracy_test0, accuracy_test1, num_epochs
 
-
-def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=100, precision=1e-8):  # epoch 수정
+def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=20, precision=1e-8):
     since = time.time()
 
     best_loss = float('inf')
 
     patience = 30
-    patience_increase = 3
-    hundred = False
+    patience_increase = 10
     for epoch in range(num_epochs):
         epoch_start = time.time()
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -214,7 +190,6 @@ def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=10
                     loss = criterion(outputs, labels)
                     loss.backward()
                     optimizer.step()
-                    # scheduler.step(loss) ##added by me --HS
                     loss = loss.item()
 
                 else:
@@ -225,7 +200,7 @@ def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=10
                     total_sub_pass = 0
                     for repeat in range(20):
                         outputs = cnn(inputs)
-                        labels = labels.long()
+                        labels=labels.long()
                         loss = criterion(outputs, labels)
                         if loss_intermediary == 0.:
                             loss_intermediary = loss.item()
@@ -236,7 +211,9 @@ def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=10
                                               prediction_from_this_sub_network.cpu().numpy().tolist()] += 1
                         total_sub_pass += 1
                     _, predictions = torch.max(accumulated_predicted.data, 1)
-                    loss = loss_intermediary / total_sub_pass
+                    loss = loss_intermediary/total_sub_pass
+
+
 
                 # statistics
                 running_loss += loss
@@ -251,19 +228,16 @@ def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=10
             # deep copy the model
             if phase == 'val':
                 scheduler.step(epoch_loss)
-                if epoch_loss + precision < best_loss:
+                if epoch_loss+precision < best_loss:
                     print("New best validation loss:", epoch_loss)
                     best_loss = epoch_loss
                     torch.save(cnn.state_dict(), 'best_weights_source_wavelet.pt')
                     patience = patience_increase + epoch
-                if epoch_acc == 1:
-                    print("stopped because of 100%")
-                    hundred = True
-
         print("Epoch {} of {} took {:.3f}s".format(
             epoch + 1, num_epochs, time.time() - epoch_start))
-        if epoch > patience or hundred:
+        if epoch > patience:
             break
+    print()
 
     time_elapsed = time.time() - since
 
@@ -274,7 +248,8 @@ def train_model(cnn, criterion, optimizer, scheduler, dataloaders, num_epochs=10
     cnn_weights = torch.load('best_weights_source_wavelet.pt')
     cnn.load_state_dict(cnn_weights)
     cnn.eval()
-    return cnn, num_epochs
+    return cnn
+
 
 
 if __name__ == '__main__':
@@ -296,7 +271,7 @@ if __name__ == '__main__':
     labels_validation1 = np.load("../formatted_datasets/test1_evaluation_labels.npy", encoding="bytes",
                                  allow_pickle=True)
 
-    print("torch cuda is available", torch.cuda.is_available())
+    #print("torch cuda is available", torch.cuda.is_available())
 
     accuracy_one_by_one = []
     array_training_error = []
@@ -307,7 +282,7 @@ if __name__ == '__main__':
 
     num_epochs = 0
 
-    for i in range(1):  # 20번 돌려서 평균내는 역할.
+    for i in range(3):  # 20번 돌려서 평균내는 역할.
         accuracy_test_0, accuracy_test_1, num_epochs = calculate_fitness(examples_training, labels_training,
                                                              examples_validation0, labels_validation0,
                                                              examples_validation1, labels_validation1)

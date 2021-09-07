@@ -9,20 +9,28 @@ from torch.autograd import Variable
 import time
 from scipy.stats import mode
 import STGCN
+import STGCN_yester
+import Wavelet_CNN_Source_Network
+import gcn
 
 
 def add_args(parser):
-    parser.add_argument('--epoch', type=int, default=100, metavar='N',
+    parser.add_argument('--epoch', type=int, default=15, metavar='N',
                         help='number of training')
 
-    parser.add_argument('--lr', type=float, default=0.0001, metavar='N',
+    parser.add_argument('--lr', type=float, default=0.0005, metavar='N',
                         help='learning rate')
 
-    parser.add_argument('--batch_size', type=int, default=200, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=64, metavar='N',
                         help='insert batch size for training(default 128)')
 
     parser.add_argument('--precision', type=float, default=1e-6, metavar='N',
                         help='reducing learning rate when a metric has stopped improving(default = 0.0000001')
+
+    parser.add_argument('--channel',default='[7,8,8]',metavar='N', help=' 3 channel')
+
+    parser.add_argument('--dropout', type=float, default=0.2, metavar='N',
+                        help='probability of elements to be zero')
 
     args = parser.parse_args()
 
@@ -69,30 +77,32 @@ def calculate_fitness(args, examples_training, labels_training, examples_test_0,
 
     X_fine_tunning, Y_fine_tunning = scramble(X_fine_tune_train, Y_fine_tune_train)
 
+
     valid_examples = X_fine_tunning[0:int(len(X_fine_tunning) * 0.1)]
     labels_valid = Y_fine_tunning[0:int(len(Y_fine_tunning) * 0.1)]
     X_fine_tune = X_fine_tunning[int(len(X_fine_tunning) * 0.1):]
     Y_fine_tune = Y_fine_tunning[int(len(Y_fine_tunning) * 0.1):]
-    print("total data size :", len(X_fine_tune_train))
-    X_fine_tune = torch.from_numpy(np.array(X_fine_tune, dtype=np.float32))
-    X_fine_tune = torch.transpose(X_fine_tune, 1, 2)
+    print("total data size :", len(X_fine_tune_train), np.shape(np.array(X_fine_tune_train)))
+    X_fine_tune = torch.from_numpy(np.array(X_fine_tune[:81200], dtype=np.float32))
+    #X_fine_tune = torch.transpose(X_fine_tune, 1, 2)
     X_fine_tune = torch.transpose(X_fine_tune, 1, 3)
     print("train data :", np.shape(np.array(X_fine_tune)))
-    Y_fine_tune = torch.from_numpy(np.array(Y_fine_tune, dtype=np.float32))
-    valid_examples = torch.from_numpy(np.array(valid_examples, dtype=np.float32))
-    valid_examples = torch.transpose(valid_examples, 1, 2)
+    Y_fine_tune = torch.from_numpy(np.array(Y_fine_tune[:81200], dtype=np.float32))
+    valid_examples = torch.from_numpy(np.array(valid_examples[:9000], dtype=np.float32))
+    #valid_examples = torch.transpose(valid_examples, 1, 2)
     valid_examples = torch.transpose(valid_examples, 1, 3)
     print("valid data :", np.shape(np.array(valid_examples)))
-    labels_valid = torch.from_numpy(np.array(labels_valid, dtype=np.float32))
+    labels_valid = torch.from_numpy(np.array(labels_valid[:9000], dtype=np.float32))
     # dimension setting
     X_test_0 = torch.from_numpy(np.array(X_test_0, dtype=np.float32))
-    X_test_0 = torch.transpose(X_test_0, 1, 2)
+    #X_test_0 = torch.transpose(X_test_0, 1, 2)
     X_test_0 = torch.transpose(X_test_0, 1, 3)
-    X_test_1 = torch.from_numpy(np.array(X_test_1, dtype=np.float32))
-    X_test_1 = torch.transpose(X_test_1, 1, 2)
+    X_test_1 = torch.from_numpy(np.array(X_test_1[:90250], dtype=np.float32))
+    #X_test_1 = torch.transpose(X_test_1, 1, 2)
     X_test_1 = torch.transpose(X_test_1, 1, 3)
     Y_test_0 = torch.from_numpy(np.array(Y_test_0, dtype=np.float32))
-    Y_test_1 = torch.from_numpy(np.array(Y_test_1, dtype=np.float32))
+    Y_test_1 = torch.from_numpy(np.array(Y_test_1[:90250], dtype=np.float32))
+    print(X_test_0.shape, X_test_1.shape)
 
     # dataset
     train = TensorDataset(X_fine_tune, Y_fine_tune)
@@ -107,9 +117,11 @@ def calculate_fitness(args, examples_training, labels_training, examples_test_0,
     test_1_loader = torch.utils.data.DataLoader(test_1, batch_size=args.batch_size, shuffle=False)
 
     # model create
-    stgcn = STGCN.St_conv_block(8, 2, 2, [7, 16, 32], "scope", 0.3, act_func='glu', channel=1, num_class=7)
+    stgcn = STGCN.St_conv_block(8, 1, 1, eval(args.channel), "scope", 0.4, act_func='glu', channel=1, num_class=7)
+    stgcn = gcn.MYOGCN(7, 32, 32, 32, 16, 7, 0.2, 7)
+
     criterion = nn.NLLLoss(size_average=False)
-    optimizer = optim.Adam(stgcn.parameters(), lr=args.lr)  # lr=0.0404709
+    optimizer = optim.Adam(stgcn.parameters(), lr=args.lr)  # lr=0.0404709 lr=args.lr
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', factor=.2, patience=5,
                                                      verbose=True, eps=args.precision) #학습이 개선되지 않을때 자동으로 학습률을 조절합니다.
     #training
@@ -133,7 +145,7 @@ def calculate_fitness(args, examples_training, labels_training, examples_test_0,
                                       ground_truth_test_0.data.cpu().numpy()).sum()
         total += ground_truth_test_0.size(0)
     accuracy_test0.append(100 * float(correct_prediction_test_0) / float(total))
-    print("ACCURACY TEST_0 FINAL : %.3f %%" % (100 * float(correct_prediction_test_0) / float(total)))
+    print("ACCURACY TESƒT_0 FINAL : %.3f %%" % (100 * float(correct_prediction_test_0) / float(total)))
 
     # test : set_1
     total = 0
@@ -157,7 +169,7 @@ def calculate_fitness(args, examples_training, labels_training, examples_test_0,
     #result
     print("AVERAGE ACCURACY TEST 0 %.3f" % np.array(accuracy_test0).mean())
     print("AVERAGE ACCURACY TEST 1 %.3f" % np.array(accuracy_test1).mean())
-    return accuracy_test0, accuracy_test1, num_epochs
+    return accuracy_test0, accuracy_test1, num_epoch
 
 
 def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs, precision):
@@ -226,16 +238,16 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs,
                 phase, epoch_loss, epoch_acc))
 
             # earlystopping
-            # if phase == 'val':
-            #     scheduler.step(epoch_loss)
-            #     if epoch_loss + precision < best_loss:
-            #         print("New best validation loss:", epoch_loss)
-            #         best_loss = epoch_loss
-            #         torch.save(model.state_dict(), 'best_weights_source_wavelet.pt')
-            #         patience = patience_increase + epoch
-            #     if epoch_acc == 1:
-            #         print("stopped because of 100%")
-            #         hundred = True
+            if phase == 'val':
+                scheduler.step(epoch_loss)
+                if epoch_loss + precision < best_loss:
+                    print("New best validation loss:", epoch_loss)
+                    best_loss = epoch_loss
+                    torch.save(model.state_dict(), 'best_weights_source_wavelet.pt')
+                    patience = patience_increase + epoch
+                if epoch_acc == 1:
+                    print("stopped because of 100%")
+                    hundred = True
 
         print("Epoch {} of {} took {:.3f}s".format(
             epoch + 1, num_epochs, time.time() - epoch_start))
@@ -264,7 +276,7 @@ if __name__ == "__main__":
     labels_validation1 = np.load("../formatted_datasets/test1_evaluation_labels.npy", encoding="bytes",
                                  allow_pickle=True)
 
-    print("torch cuda is available", torch.cuda.is_available())
+
     parser = argparse.ArgumentParser()
     args = add_args(parser)
 
@@ -303,3 +315,4 @@ if __name__ == "__main__":
     #     myfile.write(str(np.mean(test_1, axis=0)) + '\n')
     #     myfile.write(str(np.mean(test_1)) + '\n')
     #     myfile.write("\n\n\n")
+
