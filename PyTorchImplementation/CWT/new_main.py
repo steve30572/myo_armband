@@ -18,10 +18,10 @@ def add_args(parser):
     parser.add_argument('--epoch', type=int, default=15, metavar='N',
                         help='number of training')
 
-    parser.add_argument('--lr', type=float, default=0.0005, metavar='N',
+    parser.add_argument('--lr', type=float, default=0.001, metavar='N',
                         help='learning rate')
 
-    parser.add_argument('--batch_size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=512, metavar='N',
                         help='insert batch size for training(default 128)')
 
     parser.add_argument('--precision', type=float, default=1e-6, metavar='N',
@@ -49,7 +49,7 @@ def scramble(examples, labels):
     return new_examples, new_labels
 
 
-def calculate_fitness(args, examples_training, labels_training, examples_test_0, labels_test_0, examples_test_1,
+def train_all(args, examples_training, labels_training, examples_test_0, labels_test_0, examples_test_1,
                       labels_test_1):
     accuracy_test0, accuracy_test1 = [], []
     X_fine_tune_train, Y_fine_tune_train = [], []
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     test_0, test_1 = [], []
 
     for i in range(3):  # range(20) 20번 돌려서 평균내는 역할.
-        accuracy_test_0, accuracy_test_1, num_epochs = calculate_fitness(args, examples_training, labels_training,
+        accuracy_test_0, accuracy_test_1, num_epochs = train_all(args, examples_training, labels_training,
                                                                          examples_validation0, labels_validation0,
                                                                          examples_validation1, labels_validation1)
         print(accuracy_test_0)
